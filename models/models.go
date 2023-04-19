@@ -55,8 +55,8 @@ type UserAndContest struct {
 }
 
 type SimpleModerator struct {
-	Login        string `json:"login"`
-	PasswordHash string `json:"password"`
+	Login    string `json:"login"`
+	Password string `json:"password"`
 }
 
 type Moderators struct {

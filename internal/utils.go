@@ -32,9 +32,9 @@ func IntArrayToDbNotation(Data []int) string {
 	return result
 }
 
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-	return string(bytes), err
+func HashPassword(password string) string {
+	bytes, _ := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes)
 }
 
 func CheckPasswordHash(password, hash string) bool {

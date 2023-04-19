@@ -77,12 +77,20 @@ func CreateUser(user models.User) error {
 }
 
 func CreateModerator(moderator models.SimpleModerator) error {
-	var dest models.SimpleModerator
+	var dest models.Moderators
 	res := DbPool.First(&dest, "login = ?", moderator.Login)
 	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-		res = DbPool.Create(&models.Moderators{SimpleModerator: moderator})
-	} else {
-
+		res = DbPool.Create(&models.Moderators{SimpleModerator: models.SimpleModerator{Login: moderator.Login, Password: moderator.Password}})
 	}
 	return res.Error
+}
+
+func GetPasswordHash(login string) (string, error) {
+	var password models.Moderators
+	res := DbPool.First(&password, "login = ?", login)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		return "", res.Error
+	} else {
+		return password.Password, nil
+	}
 }
