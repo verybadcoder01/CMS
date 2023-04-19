@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"golang.org/x/crypto/bcrypt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // DbNotationToArray принимает строку вида "число1,число2,..." и возвращает массив вида [число1, число2, ...]
@@ -28,4 +30,18 @@ func IntArrayToDbNotation(Data []int) string {
 	}
 	result = result[:len(result)-1]
 	return result
+}
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+func (s Session) isExpired() bool {
+	return s.expiry.Before(time.Now())
 }

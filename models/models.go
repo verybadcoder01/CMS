@@ -38,9 +38,9 @@ type Admin struct {
 	Description string
 }
 
-type GroupUserId struct {
-	UserGroup string `gorm:"primaryKey;autoIncrement:false"`
-	Role      Role   `gorm:"foreignKey:AdminRefer"`
+type UserContestId struct {
+	UserContest string `gorm:"primaryKey;autoIncrement:false"`
+	Role        Role   `gorm:"foreignKey:AdminRefer"`
 }
 
 type GroupContestId struct {
@@ -48,10 +48,25 @@ type GroupContestId struct {
 	Belongs      bool
 }
 
-type UserAndGroup struct {
-	UserId  int  `json:"userId"`
-	GroupId int  `json:"groupId"`
-	Role    Role `json:"role"`
+type UserAndContest struct {
+	UserId    int  `json:"userId"`
+	ContestId int  `json:"contestId"`
+	Role      Role `json:"role"`
+}
+
+type SimpleModerator struct {
+	Login        string `json:"login"`
+	PasswordHash string `json:"password"`
+}
+
+type Moderators struct {
+	ID int `gorm:"primaryKey"`
+	SimpleModerator
+}
+
+type ModeratorGroup struct {
+	ModeratorGroupId string `gorm:"primaryKey;autoIncrement:false"`
+	IsHost           bool
 }
 
 type Role int

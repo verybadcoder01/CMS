@@ -31,7 +31,7 @@ func CreateDbFile(path string, p logger.Interface) {
 }
 
 func InitTables() {
-	err := DbPool.AutoMigrate(&models.User{}, &models.Contest{}, &models.Group{}, &models.Admin{}, &models.GroupUserId{}, &models.GroupContestId{})
+	err := DbPool.AutoMigrate(&models.User{}, &models.Contest{}, &models.Group{}, &models.Admin{}, &models.UserContestId{}, &models.GroupContestId{}, &models.Moderators{}, &models.ModeratorGroup{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,12 +53,12 @@ func AddContestToGroup(GroupId int, contestId int) {
 	}
 }
 
-func AddUserToGroup(GroupId int, userId int, role models.Role) error {
-	var idMixed = strconv.Itoa(userId) + "," + strconv.Itoa(GroupId)
-	var existing models.GroupUserId
-	res := DbPool.First(&existing, "user_group = ?", idMixed)
+func AddUserToContest(ContestId int, userId int, role models.Role) error {
+	var idMixed = strconv.Itoa(userId) + "," + strconv.Itoa(ContestId)
+	var existing models.UserContestId
+	res := DbPool.First(&existing, "user_contest = ?", idMixed)
 	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-		res = DbPool.Create(&models.GroupUserId{UserGroup: idMixed, Role: role})
+		res = DbPool.Create(&models.UserContestId{UserContest: idMixed, Role: role})
 	} else {
 		existing.Role = role
 		res = DbPool.Save(&existing)
@@ -73,5 +73,16 @@ func AddContest(contest models.BasicContest) error {
 
 func CreateUser(user models.User) error {
 	res := DbPool.Create(&user)
+	return res.Error
+}
+
+func CreateModerator(moderator models.SimpleModerator) error {
+	var dest models.SimpleModerator
+	res := DbPool.First(&dest, "login = ?", moderator.Login)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		res = DbPool.Create(&models.Moderators{SimpleModerator: moderator})
+	} else {
+
+	}
 	return res.Error
 }
