@@ -1,3 +1,4 @@
 db_path: "./resources/main.db"
 log_path: "./resources/log.txt"
 port: ":5757"
+is_debug: true

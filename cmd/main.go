@@ -3,6 +3,7 @@ package main
 import (
 	"cms/db"
 	"cms/internal"
+	"cms/models"
 	"github.com/gofiber/fiber/v2"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/gorm/logger"
@@ -13,6 +14,7 @@ import (
 
 func main() {
 	conf := internal.ParseConfig()
+	models.ISDEBUG = conf.IsDebug
 	f, err := os.OpenFile(conf.LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		panic(err)

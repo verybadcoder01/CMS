@@ -1,35 +1,31 @@
 package internal
 
 import (
+	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
-	"strconv"
-	"strings"
+	"log"
+	"net/http"
 	"time"
 )
 
-// DbNotationToArray принимает строку вида "число1,число2,..." и возвращает массив вида [число1, число2, ...]
-func DbNotationToArray(DbNotation string) []int {
-	var result []int
-	numbers := strings.Split(DbNotation, ",")
-	for _, number := range numbers {
-		num, _ := strconv.Atoi(number)
-		result = append(result, num)
+// CookieAuthCheck проверяет, актуальна ли текущая сессия модера
+func CookieAuthCheck(c *fiber.Ctx) int {
+	token := c.Cookies(AuthCookieName, "-1")
+	if token == "-1" {
+		log.Println("cookie not found")
+		return http.StatusInternalServerError
 	}
-	return result
-}
-
-// IntArrayToDbNotation функция, обратная к предыдущей
-func IntArrayToDbNotation(Data []int) string {
-	if len(Data) == 0 {
-		return ""
+	session, exists := sessions[token]
+	if !exists {
+		log.Printf("user not authorized on access route, token %v", token)
+		return http.StatusBadRequest
 	}
-	var result string
-	for _, number := range Data {
-		result += strconv.Itoa(number)
-		result += ","
+	if session.isExpired() {
+		log.Printf("session %v has expired", session)
+		delete(sessions, token)
+		return http.StatusUnauthorized
 	}
-	result = result[:len(result)-1]
-	return result
+	return 0
 }
 
 func HashPassword(password string) string {

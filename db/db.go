@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 var DbPool *gorm.DB
@@ -31,7 +32,7 @@ func CreateDbFile(path string, p logger.Interface) {
 }
 
 func InitTables() {
-	err := DbPool.AutoMigrate(&models.User{}, &models.Contest{}, &models.Group{}, &models.Admin{}, &models.UserContestId{}, &models.GroupContestId{}, &models.Moderators{}, &models.ModeratorGroup{})
+	err := DbPool.AutoMigrate(&models.User{}, &models.Contest{}, &models.Group{}, &models.Admin{}, &models.ModeratorContestId{}, &models.GroupContestId{}, &models.Moderators{}, &models.ModeratorGroup{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -51,19 +52,6 @@ func AddContestToGroup(GroupId int, contestId int) {
 		existing.Belongs = true
 		DbPool.Save(&existing)
 	}
-}
-
-func AddUserToContest(ContestId int, userId int, role models.Role) error {
-	var idMixed = strconv.Itoa(userId) + "," + strconv.Itoa(ContestId)
-	var existing models.UserContestId
-	res := DbPool.First(&existing, "user_contest = ?", idMixed)
-	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
-		res = DbPool.Create(&models.UserContestId{UserContest: idMixed, Role: role})
-	} else {
-		existing.Role = role
-		res = DbPool.Save(&existing)
-	}
-	return res.Error
 }
 
 func AddContest(contest models.BasicContest) error {
@@ -93,4 +81,44 @@ func GetPasswordHash(login string) (string, error) {
 	} else {
 		return password.Password, nil
 	}
+}
+
+func GetContestsInGroup(group int) ([]string, error) {
+	var contests []models.GroupContestId
+	raw := DbPool.Find(&contests, "group_contest LIKE ? AND belongs=1", strconv.Itoa(group)+"%")
+	if errors.Is(raw.Error, gorm.ErrRecordNotFound) {
+		return []string{}, nil
+	} else if raw.Error != nil {
+		return []string{}, raw.Error
+	}
+	var final []string
+	for _, val := range contests {
+		final = append(final, strings.Split(val.GroupContest, ",")[1])
+	}
+	return final, nil
+}
+
+func GetContestInfo(contest int) (models.BasicContest, error) {
+	var result models.Contest
+	res := DbPool.First(&result, contest)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		return models.BasicContest{}, nil
+	} else if res.Error != nil {
+		return models.BasicContest{}, res.Error
+	}
+	return models.BasicContest{Url: result.Url, ContestPicture: result.ContestPicture, Comment: result.Comment, StatementsUrl: result.StatementsUrl}, nil
+}
+
+func IsHostInGroup(group int, login string) bool {
+	var id models.Moderators
+	err := DbPool.First(&id, "login = ?", login)
+	if err != nil {
+		return false
+	}
+	var res models.ModeratorGroup
+	err = DbPool.First(&res, "moderator_group_id LIKE ? AND is_host=1", strconv.Itoa(id.ID)+","+strconv.Itoa(group))
+	if err != nil {
+		return false
+	}
+	return true
 }

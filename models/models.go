@@ -1,10 +1,13 @@
 package models
 
+var ISDEBUG = false
+
 type Config struct {
 	EjudgeConAddress string `yaml:"ejudge_con_address"`
 	DbPath           string `yaml:"db_path"`
 	LogPath          string `yaml:"log_path"`
 	Port             string `yaml:"port"`
+	IsDebug          bool   `yaml:"is_debug"`
 }
 
 type User struct {
@@ -38,9 +41,11 @@ type Admin struct {
 	Description string
 }
 
-type UserContestId struct {
-	UserContest string `gorm:"primaryKey;autoIncrement:false"`
-	Role        Role   `gorm:"foreignKey:AdminRefer"`
+// тут тема какая. Если модер в группе хост, то эта таблица для него неактуальна. А если нет, то редачить может только те, где роль админ. Все.
+
+type ModeratorContestId struct {
+	ModeratorContest string `gorm:"primaryKey;autoIncrement:false"`
+	Role             Role   `gorm:"foreignKey:AdminRefer"`
 }
 
 type GroupContestId struct {
