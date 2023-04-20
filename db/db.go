@@ -14,7 +14,7 @@ import (
 
 var DbPool *gorm.DB
 
-func CreateDbFile(path string, p logger.Interface) {
+func CreateDbFile(path string, p logger.Interface, defaultAdmin models.SimpleModerator) {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		_, err = os.Create(path)
 		if err != nil {
@@ -22,7 +22,7 @@ func CreateDbFile(path string, p logger.Interface) {
 		}
 		DbPool, err = gorm.Open(sqlite.Open(path), &gorm.Config{Logger: p})
 		log.Println("Database created successfully!")
-		InitTables()
+		InitTables(defaultAdmin)
 	} else {
 		DbPool, err = gorm.Open(sqlite.Open(path), &gorm.Config{Logger: p})
 		if err != nil {
@@ -31,7 +31,7 @@ func CreateDbFile(path string, p logger.Interface) {
 	}
 }
 
-func InitTables() {
+func InitTables(defaultAdmin models.SimpleModerator) {
 	err := DbPool.AutoMigrate(&models.User{}, &models.Contest{}, &models.Group{}, &models.Admin{}, &models.ModeratorContestId{}, &models.GroupContestId{}, &models.Moderators{}, &models.ModeratorGroup{})
 	if err != nil {
 		log.Fatal(err)
@@ -40,23 +40,70 @@ func InitTables() {
 	// (1, NoAdmin), (2, YesAdmin)
 	DbPool.Select("description").Create(&models.Admin{Description: models.NoAdmin.String()})
 	DbPool.Select("description").Create(&models.Admin{Description: models.YesAdmin.String()})
+	// TODO : дефолтный админ должен быть хостом во всех группах
+	err = CreateModerator(models.SimpleModerator{Login: defaultAdmin.Login, Password: defaultAdmin.Password})
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 }
 
-func AddContestToGroup(GroupId int, contestId int) {
+func AddContestToGroup(GroupId int, contestId int) error {
 	var idMixed = strconv.Itoa(GroupId) + "," + strconv.Itoa(contestId)
 	var existing models.GroupContestId
 	res := DbPool.First(&existing, "group_contest = ?", idMixed)
 	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		DbPool.Create(&models.GroupContestId{GroupContest: idMixed, Belongs: true})
-	} else {
+	} else if res.Error == nil {
 		existing.Belongs = true
 		DbPool.Save(&existing)
+	} else {
+		return res.Error
 	}
+	return nil
 }
 
 func AddContest(contest models.BasicContest) error {
-	res := DbPool.Create(&models.Contest{BasicContest: models.BasicContest{Url: contest.Url, ContestPicture: contest.ContestPicture, StatementsUrl: contest.StatementsUrl, Comment: contest.Comment}})
+	res := DbPool.Create(&models.Contest{BasicContest: models.BasicContest{Name: contest.Name, Url: contest.Url, ContestPicture: contest.ContestPicture, StatementsUrl: contest.StatementsUrl, Comment: contest.Comment}})
 	return res.Error
+}
+
+func AddGroup(group models.Group) error {
+	res := DbPool.Create(&models.Group{Name: group.Name})
+	return res.Error
+}
+
+func AddHostToGroup(GroupId int, ModeratorId int) error {
+	var idMixed = strconv.Itoa(ModeratorId) + "," + strconv.Itoa(GroupId)
+	var existing models.ModeratorGroup
+	res := DbPool.First(&existing, "moderator_group_id = ?", idMixed)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		DbPool.Create(&models.ModeratorGroup{ModeratorGroupId: idMixed, IsHost: true})
+	} else if res.Error == nil {
+		existing.IsHost = true
+		DbPool.Save(&existing)
+	} else {
+		return res.Error
+	}
+	return nil
+}
+
+// GetContestId я знаю что это ужасно. Но что поделать. Если у двух контестов одинаковая ссылка на условия и на задачи, в чем между ними разница?
+func GetContestId(url string, statementsUrl string, name string) (int, error) {
+	var res models.Contest
+	err := DbPool.Find(&res, "url = ? AND statements_url = ? AND name = ?", url, statementsUrl, name)
+	return res.ID, err.Error
+}
+
+func GetGroupId(name string) (int, error) {
+	var res models.Group
+	err := DbPool.Find(&res, "name = ?", name)
+	return res.ID, err.Error
+}
+
+func GetModeratorId(login string) (int, error) {
+	var res models.Moderators
+	err := DbPool.First(&res, "login = ?", login)
+	return res.ID, err.Error
 }
 
 func CreateUser(user models.User) error {
@@ -106,18 +153,17 @@ func GetContestInfo(contest int) (models.BasicContest, error) {
 	} else if res.Error != nil {
 		return models.BasicContest{}, res.Error
 	}
-	return models.BasicContest{Url: result.Url, ContestPicture: result.ContestPicture, Comment: result.Comment, StatementsUrl: result.StatementsUrl}, nil
+	return models.BasicContest{Name: result.Name, Url: result.Url, ContestPicture: result.ContestPicture, Comment: result.Comment, StatementsUrl: result.StatementsUrl}, nil
 }
 
 func IsHostInGroup(group int, login string) bool {
-	var id models.Moderators
-	err := DbPool.First(&id, "login = ?", login)
+	id, err := GetModeratorId(login)
 	if err != nil {
 		return false
 	}
 	var res models.ModeratorGroup
-	err = DbPool.First(&res, "moderator_group_id LIKE ? AND is_host=1", strconv.Itoa(id.ID)+","+strconv.Itoa(group))
-	if err != nil {
+	e := DbPool.First(&res, "moderator_group_id LIKE ? AND is_host=1", strconv.Itoa(id)+","+strconv.Itoa(group))
+	if e.Error != nil {
 		return false
 	}
 	return true

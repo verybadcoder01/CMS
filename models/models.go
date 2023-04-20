@@ -8,6 +8,8 @@ type Config struct {
 	LogPath          string `yaml:"log_path"`
 	Port             string `yaml:"port"`
 	IsDebug          bool   `yaml:"is_debug"`
+	AdminLogin       string `yaml:"admin_login"`
+	AdminPassword    string `yaml:"admin_password"`
 }
 
 type User struct {
@@ -20,11 +22,12 @@ type User struct {
 
 // Group по факту это отдельная система. например, группа лкш2023, группа контестов 10и
 type Group struct {
-	ID   int `gorm:"primaryKey"`
-	Name string
+	ID   int    `gorm:"primaryKey" json:"id"`
+	Name string `json:"name"`
 }
 
 type BasicContest struct {
+	Name           string `json:"name"`
 	Url            string `json:"url"`
 	ContestPicture string `json:"contestPicture"`
 	Comment        string `json:"comment"`

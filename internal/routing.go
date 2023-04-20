@@ -29,7 +29,16 @@ func SetupRouting(app *fiber.App) {
 	app.Get("/api/shutdown", func(c *fiber.Ctx) error {
 		return app.Shutdown()
 	})
-	app.Get("/api/admins/signin", func(c *fiber.Ctx) error {
+	app.Get("/api/inner/register_admin", func(c *fiber.Ctx) error {
+		res := CookieAuthCheck(c)
+		switch res {
+		case http.StatusUnauthorized:
+			return c.Status(http.StatusUnauthorized).SendString("session has expired")
+		case http.StatusInternalServerError:
+			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusBadRequest:
+			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+		}
 		var req models.SimpleModerator
 		err := json.Unmarshal(c.Body(), &req)
 		if err != nil {
@@ -39,7 +48,7 @@ func SetupRouting(app *fiber.App) {
 		req.Password = HashPassword(req.Password)
 		err = db.CreateModerator(req)
 		if err != nil {
-			log.Println("user already exists: " + err.Error())
+			log.Println("moderator already exists: " + err.Error())
 			return c.Status(http.StatusBadRequest).SendString("user with this login already exists")
 		}
 		return c.SendStatus(http.StatusOK)
@@ -160,8 +169,50 @@ func SetupRouting(app *fiber.App) {
 				log.Println("can't create contest " + err.Error())
 				return c.Status(http.StatusInternalServerError).SendString("can't create contest")
 			}
+			id, err := db.GetContestId(newContest.Url, newContest.StatementsUrl, newContest.Name)
+			err = db.AddContestToGroup(group, id)
+			if err != nil {
+				log.Println("can't add contest to group " + err.Error())
+				return c.Status(http.StatusInternalServerError).SendString("can't create contest")
+			}
 			return c.Status(http.StatusOK).SendString("successful")
 		}
 		return c.Status(http.StatusForbidden).SendString("you are not host")
+	})
+	app.Get("/api/admins/create_group", func(c *fiber.Ctx) error {
+		res := CookieAuthCheck(c)
+		switch res {
+		case http.StatusUnauthorized:
+			return c.Status(http.StatusUnauthorized).SendString("session has expired")
+		case http.StatusInternalServerError:
+			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusBadRequest:
+			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+		}
+		token := c.Cookies(AuthCookieName, "-1")
+		session, _ := sessions[token]
+		var newGroup models.Group
+		err := json.Unmarshal(c.Body(), &newGroup)
+		if err != nil {
+			log.Println("can't parse json " + err.Error())
+			return c.Status(http.StatusBadRequest).SendString("can't parse json")
+		}
+		err = db.AddGroup(newGroup)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("failed to create new group")
+		}
+		id, _ := db.GetGroupId(newGroup.Name)
+		moderatorId, err := db.GetModeratorId(session.login)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("failed to create new group")
+		}
+		err = db.AddHostToGroup(id, moderatorId)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("failed to create new group")
+		}
+		return c.Status(http.StatusOK).SendString("successful")
 	})
 }
