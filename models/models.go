@@ -22,8 +22,10 @@ type User struct {
 
 // Group по факту это отдельная система. например, группа лкш2023, группа контестов 10и
 type Group struct {
-	ID   int    `gorm:"primaryKey" json:"id"`
-	Name string `json:"name"`
+	ID           int    `gorm:"primaryKey" json:"id"`
+	Name         string `json:"name"`
+	GroupPicture string `json:"groupPicture"`
+	Description  string `json:"description"`
 }
 
 type BasicContest struct {
@@ -75,6 +77,12 @@ type Moderators struct {
 type ModeratorGroup struct {
 	ModeratorGroupId string `gorm:"primaryKey;autoIncrement:false"`
 	IsHost           bool
+}
+
+// GroupAndHost отличия от верхней в том, что здесь просто айди группы и модератора отдельно. без хостов и тп
+type GroupAndHost struct {
+	ModeratorId string `json:"moderatorId"`
+	GroupId     int    `json:"groupId"`
 }
 
 type Role int

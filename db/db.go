@@ -40,7 +40,6 @@ func InitTables(defaultAdmin models.SimpleModerator) {
 	// (1, NoAdmin), (2, YesAdmin)
 	DbPool.Select("description").Create(&models.Admin{Description: models.NoAdmin.String()})
 	DbPool.Select("description").Create(&models.Admin{Description: models.YesAdmin.String()})
-	// TODO : дефолтный админ должен быть хостом во всех группах
 	err = CreateModerator(models.SimpleModerator{Login: defaultAdmin.Login, Password: defaultAdmin.Password})
 	if err != nil {
 		log.Fatal(err.Error())
@@ -68,10 +67,11 @@ func AddContest(contest models.BasicContest) error {
 }
 
 func AddGroup(group models.Group) error {
-	res := DbPool.Create(&models.Group{Name: group.Name})
+	res := DbPool.Create(&group)
 	return res.Error
 }
 
+// AddHostToGroup выдает админку или создает запись, если ее нет
 func AddHostToGroup(GroupId int, ModeratorId int) error {
 	var idMixed = strconv.Itoa(ModeratorId) + "," + strconv.Itoa(GroupId)
 	var existing models.ModeratorGroup
@@ -156,15 +156,22 @@ func GetContestInfo(contest int) (models.BasicContest, error) {
 	return models.BasicContest{Name: result.Name, Url: result.Url, ContestPicture: result.ContestPicture, Comment: result.Comment, StatementsUrl: result.StatementsUrl}, nil
 }
 
-func IsHostInGroup(group int, login string) bool {
-	id, err := GetModeratorId(login)
-	if err != nil {
-		return false
-	}
+func IsHostInGroup(group int, moderatorId int) bool {
 	var res models.ModeratorGroup
-	e := DbPool.First(&res, "moderator_group_id LIKE ? AND is_host=1", strconv.Itoa(id)+","+strconv.Itoa(group))
+	e := DbPool.First(&res, "moderator_group_id LIKE ? AND is_host=1", strconv.Itoa(moderatorId)+","+strconv.Itoa(group))
 	if e.Error != nil {
 		return false
 	}
 	return true
+}
+
+func GetGroups() ([]models.Group, error) {
+	var res []models.Group
+	raw := DbPool.Find(&res)
+	if errors.Is(raw.Error, gorm.ErrRecordNotFound) {
+		return res, nil
+	} else if raw.Error != nil {
+		return []models.Group{}, raw.Error
+	}
+	return res, nil
 }

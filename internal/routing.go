@@ -26,10 +26,10 @@ const CookieExpiryTime = 24 * time.Hour
 var sessions = map[string]Session{}
 
 func SetupRouting(app *fiber.App) {
-	app.Get("/api/shutdown", func(c *fiber.Ctx) error {
+	app.Post("/api/shutdown", func(c *fiber.Ctx) error {
 		return app.Shutdown()
 	})
-	app.Get("/api/inner/register_admin", func(c *fiber.Ctx) error {
+	app.Post("/api/inner/register_admin", func(c *fiber.Ctx) error {
 		res := CookieAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
@@ -53,7 +53,7 @@ func SetupRouting(app *fiber.App) {
 		}
 		return c.SendStatus(http.StatusOK)
 	})
-	app.Get("/api/admins/login", func(c *fiber.Ctx) error {
+	app.Post("/api/admins/login", func(c *fiber.Ctx) error {
 		var req models.SimpleModerator
 		err := json.Unmarshal(c.Body(), &req)
 		if err != nil {
@@ -143,14 +143,14 @@ func SetupRouting(app *fiber.App) {
 		}
 		return nil
 	})
-	app.Get("/api/admins/+/create_contest", func(c *fiber.Ctx) error {
+	app.Post("/api/admins/create_contest", func(c *fiber.Ctx) error {
 		var newContest models.BasicContest
 		err := json.Unmarshal(c.Body(), &newContest)
 		if err != nil {
 			log.Println("can't unmarshall json " + err.Error())
 			return c.Status(http.StatusBadRequest).SendString("can't unmarshall json")
 		}
-		group, _ := strconv.Atoi(c.Params("+"))
+		group := c.GetReqHeaders()["Group"]
 		res := CookieAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
@@ -163,14 +163,28 @@ func SetupRouting(app *fiber.App) {
 		// да, я повторил два действия из проверки авторизации. Что ты мне сделаешь?
 		token := c.Cookies(AuthCookieName, "-1")
 		session, _ := sessions[token]
-		if db.IsHostInGroup(group, session.login) {
+		id, err := db.GetModeratorId(session.login)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unknown error")
+		}
+		groupId, err := db.GetGroupId(group)
+		if err != nil {
+			log.Println(err.Error())
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return c.Status(http.StatusBadRequest).SendString("no such group")
+			} else {
+				return c.Status(http.StatusInternalServerError).SendString("couldn't create contest")
+			}
+		}
+		if db.IsHostInGroup(groupId, id) {
 			err = db.AddContest(newContest)
 			if err != nil {
 				log.Println("can't create contest " + err.Error())
 				return c.Status(http.StatusInternalServerError).SendString("can't create contest")
 			}
 			id, err := db.GetContestId(newContest.Url, newContest.StatementsUrl, newContest.Name)
-			err = db.AddContestToGroup(group, id)
+			err = db.AddContestToGroup(groupId, id)
 			if err != nil {
 				log.Println("can't add contest to group " + err.Error())
 				return c.Status(http.StatusInternalServerError).SendString("can't create contest")
@@ -179,7 +193,7 @@ func SetupRouting(app *fiber.App) {
 		}
 		return c.Status(http.StatusForbidden).SendString("you are not host")
 	})
-	app.Get("/api/admins/create_group", func(c *fiber.Ctx) error {
+	app.Post("/api/admins/create_group", func(c *fiber.Ctx) error {
 		res := CookieAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
@@ -213,6 +227,82 @@ func SetupRouting(app *fiber.App) {
 			log.Println(err.Error())
 			return c.Status(http.StatusInternalServerError).SendString("failed to create new group")
 		}
+		err = db.AddHostToGroup(id, 1) // дефолтный админ
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("failed to create new group")
+		}
 		return c.Status(http.StatusOK).SendString("successful")
+	})
+	app.Post("/api/admins/logout", func(c *fiber.Ctx) error {
+		res := CookieAuthCheck(c)
+		switch res {
+		case http.StatusUnauthorized:
+			return c.Status(http.StatusUnauthorized).SendString("session has expired")
+		case http.StatusInternalServerError:
+			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusBadRequest:
+			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+		}
+		token := c.Cookies(AuthCookieName, "-1")
+		delete(sessions, token)
+		c.ClearCookie(AuthCookieName)
+		return c.Status(http.StatusOK).SendString("logout successful")
+	})
+	app.Get("/api/users/groups", func(c *fiber.Ctx) error {
+		groups, err := db.GetGroups()
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("couldn't retrieve groups")
+		}
+		res, _ := json.Marshal(groups)
+		_, err = c.Response().BodyWriter().Write(res)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("couldn't retrieve groups")
+		}
+		return nil
+	})
+	app.Post("/api/admins/give_host", func(c *fiber.Ctx) error {
+		res := CookieAuthCheck(c)
+		switch res {
+		case http.StatusUnauthorized:
+			return c.Status(http.StatusUnauthorized).SendString("session has expired")
+		case http.StatusInternalServerError:
+			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusBadRequest:
+			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+		}
+		token := c.Cookies(AuthCookieName, "-1")
+		session, _ := sessions[token]
+		id, err := db.GetModeratorId(session.login)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unable to get your id")
+		}
+		var req models.GroupAndHost
+		err = json.Unmarshal(c.Body(), &req)
+		if err != nil {
+			log.Println("can't parse json " + err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unable to give host")
+		}
+		if db.IsHostInGroup(req.GroupId, id) {
+			id, err := db.GetModeratorId(req.ModeratorId)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				log.Println(err.Error())
+				return c.Status(http.StatusBadRequest).SendString("no such moderator")
+			} else if err != nil {
+				log.Println(err.Error())
+				return c.Status(http.StatusInternalServerError).SendString("unable to give host")
+			}
+			err = db.AddHostToGroup(req.GroupId, id)
+			if err != nil {
+				log.Println(err.Error())
+				return c.Status(http.StatusInternalServerError).SendString("unable to give host")
+			}
+		} else {
+			return c.Status(http.StatusForbidden).SendString("you are not authorized as group host")
+		}
+		return c.Status(http.StatusOK).SendString("success")
 	})
 }
