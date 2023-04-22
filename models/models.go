@@ -46,13 +46,6 @@ type Admin struct {
 	Description string
 }
 
-// тут тема какая. Если модер в группе хост, то эта таблица для него неактуальна. А если нет, то редачить может только те, где роль админ. Все.
-
-type ModeratorContestId struct {
-	ModeratorContest string `gorm:"primaryKey;autoIncrement:false"`
-	Role             Role   `gorm:"foreignKey:AdminRefer"`
-}
-
 type GroupContestId struct {
 	GroupContest string `gorm:"primaryKey;autoIncrement:false"`
 	Belongs      bool

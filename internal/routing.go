@@ -26,7 +26,23 @@ const CookieExpiryTime = 24 * time.Hour
 var sessions = map[string]Session{}
 
 func SetupRouting(app *fiber.App) {
+	// требует, чтобы ты был залогинен как дефолтный модератор
 	app.Post("/api/shutdown", func(c *fiber.Ctx) error {
+		res := CookieAuthCheck(c)
+		switch res {
+		case http.StatusUnauthorized:
+			return c.Status(http.StatusUnauthorized).SendString("session has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+		case http.StatusBadRequest:
+			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+		}
+		token := c.Cookies(AuthCookieName, "-1")
+		session, _ := sessions[token]
+		id, _ := db.GetModeratorId(session.login)
+		if id != 1 {
+			return c.Status(http.StatusForbidden).SendString("must be number 1 moderator to do this")
+		}
 		return app.Shutdown()
 	})
 	app.Post("/api/inner/register_admin", func(c *fiber.Ctx) error {
@@ -34,8 +50,8 @@ func SetupRouting(app *fiber.App) {
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
-		case http.StatusInternalServerError:
-			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
 		case http.StatusBadRequest:
 			return c.Status(http.StatusBadRequest).SendString("user not authorized")
 		}
@@ -63,7 +79,7 @@ func SetupRouting(app *fiber.App) {
 		expected, err := db.GetPasswordHash(req.Login)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Printf("user with login %v not found", req.Login)
-			return c.Status(http.StatusBadRequest).SendString("user not found)")
+			return c.Status(http.StatusBadRequest).SendString("user not found")
 		}
 		if CheckPasswordHash(expected, HashPassword(req.Password)) {
 			return c.Status(http.StatusBadRequest).SendString("wrong password")
@@ -92,8 +108,8 @@ func SetupRouting(app *fiber.App) {
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
-		case http.StatusInternalServerError:
-			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
 		case http.StatusBadRequest:
 			return c.Status(http.StatusBadRequest).SendString("user not authorized")
 		default:
@@ -155,8 +171,8 @@ func SetupRouting(app *fiber.App) {
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
-		case http.StatusInternalServerError:
-			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
 		case http.StatusBadRequest:
 			return c.Status(http.StatusBadRequest).SendString("user not authorized")
 		}
@@ -183,7 +199,7 @@ func SetupRouting(app *fiber.App) {
 				log.Println("can't create contest " + err.Error())
 				return c.Status(http.StatusInternalServerError).SendString("can't create contest")
 			}
-			id, err := db.GetContestId(newContest.Url, newContest.StatementsUrl, newContest.Name)
+			id, err := db.GetContestId(newContest.Name)
 			err = db.AddContestToGroup(groupId, id)
 			if err != nil {
 				log.Println("can't add contest to group " + err.Error())
@@ -198,8 +214,8 @@ func SetupRouting(app *fiber.App) {
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
-		case http.StatusInternalServerError:
-			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
 		case http.StatusBadRequest:
 			return c.Status(http.StatusBadRequest).SendString("user not authorized")
 		}
@@ -239,8 +255,8 @@ func SetupRouting(app *fiber.App) {
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
-		case http.StatusInternalServerError:
-			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
 		case http.StatusBadRequest:
 			return c.Status(http.StatusBadRequest).SendString("user not authorized")
 		}
@@ -268,8 +284,8 @@ func SetupRouting(app *fiber.App) {
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
-		case http.StatusInternalServerError:
-			return c.Status(http.StatusInternalServerError).SendString("cookie has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
 		case http.StatusBadRequest:
 			return c.Status(http.StatusBadRequest).SendString("user not authorized")
 		}
@@ -302,6 +318,87 @@ func SetupRouting(app *fiber.App) {
 			}
 		} else {
 			return c.Status(http.StatusForbidden).SendString("you are not authorized as group host")
+		}
+		return c.Status(http.StatusOK).SendString("success")
+	})
+	app.Post("/api/admins/edit_contest", func(c *fiber.Ctx) error {
+		res := CookieAuthCheck(c)
+		switch res {
+		case http.StatusUnauthorized:
+			return c.Status(http.StatusUnauthorized).SendString("session has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+		case http.StatusBadRequest:
+			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+		}
+		var contest models.BasicContest
+		err := json.Unmarshal(c.Body(), &contest)
+		if err != nil {
+			log.Println("can't parse json " + err.Error())
+			return c.Status(http.StatusBadRequest).SendString("invalid request body")
+		}
+		token := c.Cookies(AuthCookieName, "-1")
+		session, _ := sessions[token]
+		modId, err := db.GetModeratorId(session.login)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unknown error")
+		}
+		contestName := c.GetReqHeaders()["Contest"]
+		id, err := db.GetContestId(contestName)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			log.Println("no such contest " + err.Error())
+			return c.Status(http.StatusBadRequest).SendString("no such contest")
+		} else if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unable to edit contest")
+		}
+		group, err := db.GetGroupByContest(id)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unknown error")
+		}
+		if db.IsHostInGroup(group, modId) {
+			err = db.EditContest(id, contest)
+			if err != nil {
+				log.Println(err.Error())
+				return c.Status(http.StatusInternalServerError).SendString("unable to edit contest")
+			}
+		}
+		return c.Status(http.StatusOK).SendString("successful")
+	})
+	app.Post("/api/admins/remove_host", func(c *fiber.Ctx) error {
+		res := CookieAuthCheck(c)
+		switch res {
+		case http.StatusUnauthorized:
+			return c.Status(http.StatusUnauthorized).SendString("session has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+		case http.StatusBadRequest:
+			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+		}
+		token := c.Cookies(AuthCookieName, "-1")
+		session, _ := sessions[token]
+		id, err := db.GetModeratorId(session.login)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unable to get your id")
+		}
+		var req models.GroupAndHost
+		err = json.Unmarshal(c.Body(), &req)
+		if err != nil {
+			log.Println("can't parse json " + err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unable to give host")
+		}
+		reqModId, err := db.GetModeratorId(req.ModeratorId)
+		if db.IsHostInGroup(req.GroupId, id) && db.IsHostInGroup(req.GroupId, reqModId) && reqModId != 1 {
+			err = db.RemoveModeratorInGroup(req.GroupId, reqModId)
+			if err != nil {
+				log.Println(err.Error())
+				return c.Status(http.StatusInternalServerError).SendString("could not remove host")
+			}
+		} else {
+			return c.Status(http.StatusForbidden).SendString("you lack permission to do that")
 		}
 		return c.Status(http.StatusOK).SendString("success")
 	})

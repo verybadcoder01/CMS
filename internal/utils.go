@@ -13,7 +13,7 @@ func CookieAuthCheck(c *fiber.Ctx) int {
 	token := c.Cookies(AuthCookieName, "-1")
 	if token == "-1" {
 		log.Println("cookie not found")
-		return http.StatusInternalServerError
+		return http.StatusForbidden
 	}
 	session, exists := sessions[token]
 	if !exists {

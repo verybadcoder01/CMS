@@ -32,7 +32,7 @@ func CreateDbFile(path string, p logger.Interface, defaultAdmin models.SimpleMod
 }
 
 func InitTables(defaultAdmin models.SimpleModerator) {
-	err := DbPool.AutoMigrate(&models.User{}, &models.Contest{}, &models.Group{}, &models.Admin{}, &models.ModeratorContestId{}, &models.GroupContestId{}, &models.Moderators{}, &models.ModeratorGroup{})
+	err := DbPool.AutoMigrate(&models.User{}, &models.Contest{}, &models.Group{}, &models.Admin{}, &models.GroupContestId{}, &models.Moderators{}, &models.ModeratorGroup{})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,10 +87,10 @@ func AddHostToGroup(GroupId int, ModeratorId int) error {
 	return nil
 }
 
-// GetContestId я знаю что это ужасно. Но что поделать. Если у двух контестов одинаковая ссылка на условия и на задачи, в чем между ними разница?
-func GetContestId(url string, statementsUrl string, name string) (int, error) {
+// GetContestId я знаю что это ужасно. Но что поделать. Если у двух контестов одинаковое имя, в чем между ними разница?
+func GetContestId(name string) (int, error) {
 	var res models.Contest
-	err := DbPool.Find(&res, "url = ? AND statements_url = ? AND name = ?", url, statementsUrl, name)
+	err := DbPool.Find(&res, "name = ?", name)
 	return res.ID, err.Error
 }
 
@@ -132,7 +132,7 @@ func GetPasswordHash(login string) (string, error) {
 
 func GetContestsInGroup(group int) ([]string, error) {
 	var contests []models.GroupContestId
-	raw := DbPool.Find(&contests, "group_contest LIKE ? AND belongs=1", strconv.Itoa(group)+"%")
+	raw := DbPool.Find(&contests, "group_contest LIKE ? AND belongs=1", strconv.Itoa(group)+",%")
 	if errors.Is(raw.Error, gorm.ErrRecordNotFound) {
 		return []string{}, nil
 	} else if raw.Error != nil {
@@ -174,4 +174,42 @@ func GetGroups() ([]models.Group, error) {
 		return []models.Group{}, raw.Error
 	}
 	return res, nil
+}
+
+func EditContest(contestId int, newContest models.BasicContest) error {
+	var existing models.Contest
+	res := DbPool.First(&existing, contestId)
+	if res.Error != nil {
+		return res.Error
+	}
+	existing.BasicContest = newContest
+	DbPool.Save(&existing)
+	return nil
+}
+
+func GetGroupByContest(contestId int) (int, error) {
+	var res models.GroupContestId
+	raw := DbPool.First(&res, "group_contest LIKE ? AND belongs=1", "%,"+strconv.Itoa(contestId))
+	if raw.Error != nil {
+		return -1, raw.Error
+	}
+	id := strings.Split(res.GroupContest, ",")[1]
+	idInt, err := strconv.Atoi(id)
+	if err != nil {
+		return -1, err
+	}
+	return idInt, nil
+}
+
+func RemoveModeratorInGroup(groupId int, moderatorId int) error {
+	var existing models.ModeratorGroup
+	res := DbPool.First(&existing, "moderator_group_id = ? AND is_host=1", strconv.Itoa(moderatorId)+","+strconv.Itoa(groupId))
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		return nil
+	} else if res.Error != nil {
+		return res.Error
+	}
+	existing.IsHost = false
+	DbPool.Save(&existing)
+	return nil
 }
