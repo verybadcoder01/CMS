@@ -66,8 +66,8 @@ func AddContest(contest models.BasicContest) error {
 	return res.Error
 }
 
-func AddGroup(group models.Group) error {
-	res := DbPool.Create(&group)
+func AddGroup(group models.BasicGroup) error {
+	res := DbPool.Create(&models.Group{BasicGroup: group})
 	return res.Error
 }
 

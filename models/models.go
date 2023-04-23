@@ -3,13 +3,14 @@ package models
 var ISDEBUG = false
 
 type Config struct {
-	EjudgeConAddress string `yaml:"ejudge_con_address"`
-	DbPath           string `yaml:"db_path"`
-	LogPath          string `yaml:"log_path"`
-	Port             string `yaml:"port"`
-	IsDebug          bool   `yaml:"is_debug"`
-	AdminLogin       string `yaml:"admin_login"`
-	AdminPassword    string `yaml:"admin_password"`
+	DbPath            string `yaml:"db_path"`
+	LogPath           string `yaml:"log_path"`
+	Port              string `yaml:"port"`
+	IsDebug           bool   `yaml:"is_debug"`
+	AdminLogin        string `yaml:"admin_login"`
+	AdminPassword     string `yaml:"admin_password"`
+	SessionExpiryTime int    `yaml:"session_expiry_time"` // в часах, при is_debug=false
+	CookieExpiryTime  int    `yaml:"cookie_expiry_time"`  // в часах, при is_debug=false
 }
 
 type User struct {
@@ -20,12 +21,16 @@ type User struct {
 	Status         string `json:"status"`
 }
 
-// Group по факту это отдельная система. например, группа лкш2023, группа контестов 10и
-type Group struct {
-	ID           int    `gorm:"primaryKey" json:"id"`
+type BasicGroup struct {
 	Name         string `json:"name"`
 	GroupPicture string `json:"groupPicture"`
 	Description  string `json:"description"`
+}
+
+// Group по факту это отдельная система. например, группа лкш2023, группа контестов 10и
+type Group struct {
+	ID int `gorm:"primaryKey" json:"id"`
+	BasicGroup
 }
 
 type BasicContest struct {

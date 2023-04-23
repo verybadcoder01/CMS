@@ -20,12 +20,16 @@ type Session struct {
 }
 
 const AuthCookieName = "auth_cookie"
-const SessionExpiryTime = 6 * time.Hour
-const CookieExpiryTime = 24 * time.Hour
+
+var SessionExpiryTime = 6 * time.Hour
+var CookieExpiryTime = 24 * time.Hour
 
 var sessions = map[string]Session{}
 
 func SetupRouting(app *fiber.App) {
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.Redirect("/api/users/groups")
+	})
 	// требует, чтобы ты был залогинен как дефолтный модератор
 	app.Post("/api/shutdown", func(c *fiber.Ctx) error {
 		res := CookieAuthCheck(c)
@@ -221,7 +225,7 @@ func SetupRouting(app *fiber.App) {
 		}
 		token := c.Cookies(AuthCookieName, "-1")
 		session, _ := sessions[token]
-		var newGroup models.Group
+		var newGroup models.BasicGroup
 		err := json.Unmarshal(c.Body(), &newGroup)
 		if err != nil {
 			log.Println("can't parse json " + err.Error())
@@ -388,7 +392,7 @@ func SetupRouting(app *fiber.App) {
 		err = json.Unmarshal(c.Body(), &req)
 		if err != nil {
 			log.Println("can't parse json " + err.Error())
-			return c.Status(http.StatusInternalServerError).SendString("unable to give host")
+			return c.Status(http.StatusInternalServerError).SendString("unable to remove host")
 		}
 		reqModId, err := db.GetModeratorId(req.ModeratorId)
 		if db.IsHostInGroup(req.GroupId, id) && db.IsHostInGroup(req.GroupId, reqModId) && reqModId != 1 {
