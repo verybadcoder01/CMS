@@ -40,9 +40,9 @@ func InitTables(defaultAdmin models.SimpleModerator) {
 	// (1, NoAdmin), (2, YesAdmin)
 	DbPool.Select("description").Create(&models.Admin{Description: models.NoAdmin.String()})
 	DbPool.Select("description").Create(&models.Admin{Description: models.YesAdmin.String()})
-	err = CreateModerator(models.SimpleModerator{Login: defaultAdmin.Login, Password: defaultAdmin.Password})
-	if err != nil {
-		log.Fatal(err.Error())
+	isOk := CreateModerator(models.SimpleModerator{Login: defaultAdmin.Login, Password: defaultAdmin.Password})
+	if isOk == false {
+		log.Fatal("kakoy-to pizdec")
 	}
 }
 
@@ -111,13 +111,18 @@ func CreateUser(user models.User) error {
 	return res.Error
 }
 
-func CreateModerator(moderator models.SimpleModerator) error {
+func CreateModerator(moderator models.SimpleModerator) bool {
 	var dest models.Moderators
 	res := DbPool.First(&dest, "login = ?", moderator.Login)
 	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		res = DbPool.Create(&models.Moderators{SimpleModerator: models.SimpleModerator{Login: moderator.Login, Password: moderator.Password}})
+	} else if res.Error != nil {
+		return false
 	}
-	return res.Error
+	if dest.Login == moderator.Login {
+		return false
+	}
+	return true
 }
 
 func GetPasswordHash(login string) (string, error) {

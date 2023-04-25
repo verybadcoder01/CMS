@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"unicode/utf8"
 )
 
 type Session struct {
@@ -65,11 +66,15 @@ func SetupRouting(app *fiber.App) {
 			log.Println("cant decode json: " + err.Error())
 			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
+		if utf8.RuneCountInString(req.Password)*4 > 72 {
+			log.Println("password too large, rejecting")
+			return c.Status(http.StatusBadRequest).SendString("password too big >72 bytes")
+		}
 		req.Password = HashPassword(req.Password)
-		err = db.CreateModerator(req)
-		if err != nil {
-			log.Println("moderator already exists: " + err.Error())
-			return c.Status(http.StatusBadRequest).SendString("user with this login already exists")
+		isOk := db.CreateModerator(req)
+		if isOk == false {
+			log.Println("moderator with this login already exists " + req.Login)
+			return c.Status(http.StatusBadRequest).SendString("moderator with this login already exists")
 		}
 		return c.SendStatus(http.StatusOK)
 	})
@@ -85,8 +90,8 @@ func SetupRouting(app *fiber.App) {
 			log.Printf("user with login %v not found", req.Login)
 			return c.Status(http.StatusBadRequest).SendString("user not found")
 		}
-		if CheckPasswordHash(expected, HashPassword(req.Password)) {
-			return c.Status(http.StatusBadRequest).SendString("wrong password")
+		if !CheckPasswordHash(req.Password, expected) {
+			return c.Status(http.StatusForbidden).SendString("wrong password")
 		}
 		sessionToken := uuid.NewString()
 		expTime := time.Now().Add(SessionExpiryTime)
@@ -168,7 +173,7 @@ func SetupRouting(app *fiber.App) {
 		err := json.Unmarshal(c.Body(), &newContest)
 		if err != nil {
 			log.Println("can't unmarshall json " + err.Error())
-			return c.Status(http.StatusBadRequest).SendString("can't unmarshall json")
+			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
 		group := c.GetReqHeaders()["Group"]
 		res := CookieAuthCheck(c)
@@ -229,7 +234,7 @@ func SetupRouting(app *fiber.App) {
 		err := json.Unmarshal(c.Body(), &newGroup)
 		if err != nil {
 			log.Println("can't parse json " + err.Error())
-			return c.Status(http.StatusBadRequest).SendString("can't parse json")
+			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
 		err = db.AddGroup(newGroup)
 		if err != nil {
@@ -304,7 +309,7 @@ func SetupRouting(app *fiber.App) {
 		err = json.Unmarshal(c.Body(), &req)
 		if err != nil {
 			log.Println("can't parse json " + err.Error())
-			return c.Status(http.StatusInternalServerError).SendString("unable to give host")
+			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
 		if db.IsHostInGroup(req.GroupId, id) {
 			id, err := db.GetModeratorId(req.ModeratorId)
@@ -339,7 +344,7 @@ func SetupRouting(app *fiber.App) {
 		err := json.Unmarshal(c.Body(), &contest)
 		if err != nil {
 			log.Println("can't parse json " + err.Error())
-			return c.Status(http.StatusBadRequest).SendString("invalid request body")
+			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
 		token := c.Cookies(AuthCookieName, "-1")
 		session, _ := sessions[token]
@@ -392,7 +397,7 @@ func SetupRouting(app *fiber.App) {
 		err = json.Unmarshal(c.Body(), &req)
 		if err != nil {
 			log.Println("can't parse json " + err.Error())
-			return c.Status(http.StatusInternalServerError).SendString("unable to remove host")
+			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
 		reqModId, err := db.GetModeratorId(req.ModeratorId)
 		if db.IsHostInGroup(req.GroupId, id) && db.IsHostInGroup(req.GroupId, reqModId) && reqModId != 1 {
