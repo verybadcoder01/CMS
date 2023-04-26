@@ -39,6 +39,7 @@ type BasicContest struct {
 	ContestPicture string `json:"contestPicture"`
 	Comment        string `json:"comment"`
 	StatementsUrl  string `json:"statementsUrl"`
+	Deadline       int64  `json:"deadline"`
 }
 
 type Contest struct {

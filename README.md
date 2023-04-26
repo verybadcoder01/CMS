@@ -101,9 +101,9 @@
 Пример: ```{"login": "lexa", "password": "123"}```
 
 ### Contest json
-Содержит 5 ключей: "name" - название контеста, "url" - ссылка на тестирующую систему, "contestPicture" - пока что не используется, ибо mvp, "comment" - описание контеста, \
-"statementsUrl" - ссылка на условия задач. Все строковые. \
-Пример: ```{"name" : "avl", "url" : "contest.yandex.ru", "contestPicture": "net", "comment" : "just do it", "statementsUrl" : "contest.yandex.ru"}```
+Содержит 6 ключей: "name" - название контеста, "url" - ссылка на тестирующую систему, "contestPicture" - пока что не используется, ибо mvp, "comment" - описание контеста, \
+"statementsUrl" - ссылка на условия задач, "deadline" - дедлайн в формате [UNIX Timestamp](https://www.unixtimestamp.com/). Все строковые. \
+Пример: ```{"name" : "avl", "url" : "contest.yandex.ru", "contestPicture": "net", "comment" : "just do it", "statementsUrl" : "contest.yandex.ru", "deadline" : 1682501972567}```
 
 ### Group json
 Содержит 3 ключа: "name" - название группы, "groupPicture" - пока что не используется, ибо mvp, "description" - описание группы. Все строковые. \

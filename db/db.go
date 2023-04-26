@@ -62,7 +62,7 @@ func AddContestToGroup(GroupId int, contestId int) error {
 }
 
 func AddContest(contest models.BasicContest) error {
-	res := DbPool.Create(&models.Contest{BasicContest: models.BasicContest{Name: contest.Name, Url: contest.Url, ContestPicture: contest.ContestPicture, StatementsUrl: contest.StatementsUrl, Comment: contest.Comment}})
+	res := DbPool.Create(&models.Contest{BasicContest: models.BasicContest{Name: contest.Name, Url: contest.Url, ContestPicture: contest.ContestPicture, StatementsUrl: contest.StatementsUrl, Comment: contest.Comment, Deadline: contest.Deadline}})
 	return res.Error
 }
 
