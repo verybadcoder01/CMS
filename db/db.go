@@ -158,7 +158,7 @@ func GetContestInfo(contest int) (models.BasicContest, error) {
 	} else if res.Error != nil {
 		return models.BasicContest{}, res.Error
 	}
-	return models.BasicContest{Name: result.Name, Url: result.Url, ContestPicture: result.ContestPicture, Comment: result.Comment, StatementsUrl: result.StatementsUrl}, nil
+	return result.BasicContest, nil
 }
 
 func IsHostInGroup(group int, moderatorId int) bool {
