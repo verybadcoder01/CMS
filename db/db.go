@@ -218,3 +218,14 @@ func RemoveModeratorInGroup(groupId int, moderatorId int) error {
 	DbPool.Save(&existing)
 	return nil
 }
+
+func EditGroup(groupId int, newGroup models.BasicGroup) error {
+	var existing models.Group
+	res := DbPool.First(&existing, groupId)
+	if res.Error != nil {
+		return res.Error
+	}
+	existing.BasicGroup = newGroup
+	DbPool.Save(&existing)
+	return nil
+}

@@ -86,6 +86,13 @@
     - 400 - invalid json body
     - 403 - you lack permission to do that
     - 200 - successful
+* /api/admins/edit_group - редактирует группу. Принимает json номер [3](#group-json), в котором записано новое состояние этой группы. Также требует в хедере \
+в параметре "Group" название редактируемой группы. Для выполнения данной операции вы должны быть хостом в данной группе. \
+    Возможные коды:
+    - 500
+    - 400 - invalid json body или no such group
+    - 403 - you must be host in group to edit it
+    - 200 - successful
 
 ## Система модераторов
 

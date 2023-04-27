@@ -411,4 +411,44 @@ func SetupRouting(app *fiber.App) {
 		}
 		return c.Status(http.StatusOK).SendString("success")
 	})
+	app.Post("/api/admins/edit_group", func(c *fiber.Ctx) error {
+		res := CookieAuthCheck(c)
+		switch res {
+		case http.StatusUnauthorized:
+			return c.Status(http.StatusUnauthorized).SendString("session has expired")
+		case http.StatusForbidden:
+			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+		case http.StatusBadRequest:
+			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+		}
+		token := c.Cookies(AuthCookieName, "-1")
+		session, _ := sessions[token]
+		id, err := db.GetModeratorId(session.login)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("unable to get your id")
+		}
+		var req models.BasicGroup
+		err = json.Unmarshal(c.Body(), &req)
+		if err != nil {
+			log.Println("can't parse json " + err.Error())
+			return c.Status(http.StatusBadRequest).SendString("invalid json body")
+		}
+		group := c.GetReqHeaders()["Group"]
+		gId, err := db.GetGroupId(group)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return c.Status(http.StatusBadRequest).SendString("no such group")
+		} else if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("cannot get group id")
+		}
+		if !db.IsHostInGroup(gId, id) {
+			return c.Status(http.StatusForbidden).SendString("you must be host in group to edit it")
+		}
+		err = db.EditGroup(gId, req)
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).SendString("cannot edit group")
+		}
+		return c.Status(http.StatusOK).SendString("successful")
+	})
 }
