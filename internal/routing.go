@@ -20,10 +20,7 @@ type Session struct {
 	expiry time.Time
 }
 
-const AuthCookieName = "auth_cookie"
-
 var SessionExpiryTime = 6 * time.Hour
-var CookieExpiryTime = 24 * time.Hour
 
 var sessions = map[string]Session{}
 
@@ -38,11 +35,11 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
-		token := c.Cookies(AuthCookieName, "-1")
+		token := c.GetReqHeaders()["Session"]
 		session, _ := sessions[token]
 		id, _ := db.GetModeratorId(session.login)
 		if id != 1 {
@@ -56,9 +53,9 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
 		var req models.SimpleModerator
 		err := json.Unmarshal(c.Body(), &req)
@@ -98,19 +95,22 @@ func SetupRouting(app *fiber.App) {
 		if models.ISDEBUG == true {
 			expTime = time.Now().Add(time.Minute)
 		}
-		sessions[sessionToken] = Session{
-			login:  req.Login,
-			expiry: expTime,
+		session := Session{login: req.Login, expiry: expTime}
+		sessions[sessionToken] = session
+		var cookie models.SessionInfo
+		cookie.Session = sessionToken
+		res, err := json.Marshal(cookie)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString("can't marshall response")
 		}
-		cookie := new(fiber.Cookie)
-		cookie.Name = AuthCookieName
-		cookie.Value = sessionToken
-		cookie.Expires = time.Now().Add(CookieExpiryTime)
-		if models.ISDEBUG == true {
-			cookie.Expires = time.Now().Add(time.Hour)
+		_, err = c.Response().BodyWriter().Write(res)
+		if err != nil {
+			log.Println(err.Error())
+			return c.Status(http.StatusInternalServerError).SendString(err.Error())
 		}
-		c.Cookie(cookie)
-		return c.Status(http.StatusOK).SendString("login successful")
+		log.Printf("send session %v", cookie)
+		return nil
 	})
 	app.Get("/api/admins/home", func(c *fiber.Ctx) error {
 		res := CookieAuthCheck(c)
@@ -118,9 +118,9 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		default:
 			return c.Status(http.StatusOK).SendString("welcome")
 		}
@@ -181,12 +181,11 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
-		// да, я повторил два действия из проверки авторизации. Что ты мне сделаешь?
-		token := c.Cookies(AuthCookieName, "-1")
+		token := c.GetReqHeaders()["Session"]
 		session, _ := sessions[token]
 		id, err := db.GetModeratorId(session.login)
 		if err != nil {
@@ -224,11 +223,11 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
-		token := c.Cookies(AuthCookieName, "-1")
+		token := c.GetReqHeaders()["Session"]
 		session, _ := sessions[token]
 		var newGroup models.BasicGroup
 		err := json.Unmarshal(c.Body(), &newGroup)
@@ -265,13 +264,12 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
-		token := c.Cookies(AuthCookieName, "-1")
+		token := c.GetReqHeaders()["Session"]
 		delete(sessions, token)
-		c.ClearCookie(AuthCookieName)
 		return c.Status(http.StatusOK).SendString("logout successful")
 	})
 	app.Get("/api/users/groups", func(c *fiber.Ctx) error {
@@ -294,11 +292,11 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
-		token := c.Cookies(AuthCookieName, "-1")
+		token := c.GetReqHeaders()["Session"]
 		session, _ := sessions[token]
 		id, err := db.GetModeratorId(session.login)
 		if err != nil {
@@ -336,9 +334,9 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
 		var contest models.BasicContest
 		err := json.Unmarshal(c.Body(), &contest)
@@ -346,7 +344,7 @@ func SetupRouting(app *fiber.App) {
 			log.Println("can't parse json " + err.Error())
 			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
-		token := c.Cookies(AuthCookieName, "-1")
+		token := c.GetReqHeaders()["Session"]
 		session, _ := sessions[token]
 		modId, err := db.GetModeratorId(session.login)
 		if err != nil {
@@ -382,11 +380,11 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
-		token := c.Cookies(AuthCookieName, "-1")
+		token := c.GetReqHeaders()["Session"]
 		session, _ := sessions[token]
 		id, err := db.GetModeratorId(session.login)
 		if err != nil {
@@ -417,11 +415,11 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
 		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("cookie has expired or never existed")
+			return c.Status(http.StatusForbidden).SendString("user not authorized")
 		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("user not authorized")
+			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
-		token := c.Cookies(AuthCookieName, "-1")
+		token := c.GetReqHeaders()["Session"]
 		session, _ := sessions[token]
 		id, err := db.GetModeratorId(session.login)
 		if err != nil {

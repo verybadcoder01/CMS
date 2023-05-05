@@ -10,19 +10,19 @@ import (
 
 // CookieAuthCheck проверяет, актуальна ли текущая сессия модера
 func CookieAuthCheck(c *fiber.Ctx) int {
-	token := c.Cookies(AuthCookieName, "-1")
-	if token == "-1" {
-		log.Println("cookie not found")
-		return http.StatusForbidden
-	}
-	session, exists := sessions[token]
+	session, exists := c.GetReqHeaders()["Session"]
 	if !exists {
-		log.Printf("user not authorized on access route, token %v", token)
+		log.Println("session header not found")
 		return http.StatusBadRequest
 	}
-	if session.isExpired() {
-		log.Printf("session %v has expired", session)
-		delete(sessions, token)
+	info, exists := sessions[session]
+	if !exists {
+		log.Printf("user not authorized on access route, session %v", info)
+		return http.StatusForbidden
+	}
+	if info.isExpired() {
+		log.Printf("session %v has expired", info)
+		delete(sessions, session)
 		return http.StatusUnauthorized
 	}
 	return 0

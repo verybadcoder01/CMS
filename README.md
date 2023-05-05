@@ -33,8 +33,10 @@
 ### Post-эндпоинты
 Все методы, требующие регистрации, могут вернуть 3 данных кода:
 - 401 - session has expired
-- 403 - cookie has expired or never existed
-- 400 - not authorized
+- 403 - user not authorized
+- 400 - header doesn't have session key
+
+Более того, все они требуют в хедерах ключ **"Session"** со значением сессии, которая была передана при логине.
 
 Далее я не буду упоминать про это под каждым из множества роутов, требующих авторизации, так что запомните.
 
@@ -47,7 +49,7 @@
     Возможные коды:
     - 400 - invalid json body или password too long >72 bytes или moderator with this login already exists
     - 200
-* /api/admins/login - войти в систему. Принимает json номер [1](#admin-json). Создает на сервере куки с вашей сессией, которая живет количество часов, указанное в конфиге \
+* /api/admins/login - войти в систему. Принимает json номер [1](#admin-json). Возвращает [6](#sessioninfo-json) с сессий, которая живет количество часов, указанное в конфиге \
     Возможные коды:
     - 400 - invalid json body или user not found 
     - 403 - wrong password
@@ -64,7 +66,7 @@
     - 400 - invalid json body
     - 500
     - 200 - successful
-* /api/admins/logout - выйти из текущего пользователя. Удаляет куки с вашей сессией и ее саму с сервера. \
+* /api/admins/logout - выйти из текущего пользователя. Удаляет вашу сессию. \
     Возможные коды:
     - 200 - successful
 * /api/admins/give_host - выдает модератору хоста в группе с указанным номером. Вы должны быть хостом в данной группе. Принимает json номер [4](#group-host-json). \
@@ -124,6 +126,10 @@
 Содержит 1 ключ: "contests" - список id контестов в данной группе. \
 Пример: ```{"contests": [1, 2]}```
 
+### SessionInfo json
+Содержит 1 ключ: "session" - сессию (uuid) данного пользователя. \
+Пример: ```{"session": "23346f6c-9d8e-470c-89f4-0db7e72b22f1"}```
+
 ## Конфиг
 
 Конфиг лежит в config.yaml файле, который должен находится в корне проекта, на одном уровне с go.mod
@@ -135,7 +141,6 @@
 - admin_login - логин дефолтного админа
 - admin_password - пароль дефолтного админа
 - session_expiry_time - длина сессии, в часах. Работает только при is_debug = false, не принимает значения <1
-- cookie_expiry_time - длина жизни создаваемой куки, в часах. Работает только при is_debug = false, не принимает значения <1 \
 
 Пример: 
 ~~~
@@ -146,7 +151,6 @@ is_debug: true
 admin_login: "admin"
 admin_password: "228336"
 session_expiry_time: 12
-cookie_expiry_time: 24
 ~~~
 В данном примере папка resources должна быть создана вручную.
 

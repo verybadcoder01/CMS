@@ -10,7 +10,6 @@ type Config struct {
 	AdminLogin        string `yaml:"admin_login"`
 	AdminPassword     string `yaml:"admin_password"`
 	SessionExpiryTime int    `yaml:"session_expiry_time"` // в часах, при is_debug=false
-	CookieExpiryTime  int    `yaml:"cookie_expiry_time"`  // в часах, при is_debug=false
 }
 
 type User struct {
@@ -82,6 +81,10 @@ type ModeratorGroup struct {
 type GroupAndHost struct {
 	ModeratorId string `json:"moderatorId"`
 	GroupId     int    `json:"groupId"`
+}
+
+type SessionInfo struct {
+	Session string `json:"session"`
 }
 
 type Role int

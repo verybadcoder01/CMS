@@ -5,4 +5,3 @@ is_debug: true
 admin_login: "admin"
 admin_password: "228336"
 session_expiry_time: 12
-cookie_expiry_time: 24

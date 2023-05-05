@@ -41,7 +41,6 @@ func main() {
 	app := fiber.New()
 	db.CreateDbFile(conf.DbPath, gormLog, models.SimpleModerator{Login: conf.AdminLogin, Password: internal.HashPassword(conf.AdminPassword)})
 	internal.SessionExpiryTime = time.Duration(conf.SessionExpiryTime) * time.Hour
-	internal.CookieExpiryTime = time.Duration(conf.CookieExpiryTime) * time.Hour
 	internal.SetupRouting(app)
 	err = app.Listen(conf.Port)
 	if err != nil {
