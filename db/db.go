@@ -62,8 +62,15 @@ func AddContestToGroup(GroupId int, contestId int) error {
 }
 
 func AddContest(contest models.BasicContest) error {
-	res := DbPool.Create(&models.Contest{BasicContest: models.BasicContest{Name: contest.Name, Url: contest.Url, ContestPicture: contest.ContestPicture, StatementsUrl: contest.StatementsUrl, Comment: contest.Comment, Deadline: contest.Deadline}})
-	return res.Error
+	newContest := models.Contest{BasicContest: contest}
+	res := DbPool.First(&newContest, "name = ? AND url = ? AND contest_picture = ? AND comment = ? AND statements_url = ?", contest.Name, contest.Url, contest.ContestPicture, contest.Comment, contest.StatementsUrl)
+	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+		res = DbPool.Create(&models.Contest{BasicContest: contest})
+		return res.Error
+	} else if res.Error == nil && newContest.BasicContest == contest {
+		return gorm.ErrInvalidData
+	}
+	return nil
 }
 
 func AddGroup(group models.BasicGroup) error {
@@ -87,10 +94,9 @@ func AddHostToGroup(GroupId int, ModeratorId int) error {
 	return nil
 }
 
-// GetContestId я знаю что это ужасно. Но что поделать. Если у двух контестов одинаковое имя, в чем между ними разница?
-func GetContestId(name string) (int, error) {
+func GetContestId(find models.BasicContest) (int, error) {
 	var res models.Contest
-	err := DbPool.Find(&res, "name = ?", name)
+	err := DbPool.Find(&res, "name = ? AND url = ? AND contest_picture = ? AND comment = ? AND statements_url = ?", find.Name, find.Url, find.ContestPicture, find.Comment, find.StatementsUrl)
 	return res.ID, err.Error
 }
 
@@ -198,7 +204,7 @@ func GetGroupByContest(contestId int) (int, error) {
 	if raw.Error != nil {
 		return -1, raw.Error
 	}
-	id := strings.Split(res.GroupContest, ",")[1]
+	id := strings.Split(res.GroupContest, ",")[0]
 	idInt, err := strconv.Atoi(id)
 	if err != nil {
 		return -1, err

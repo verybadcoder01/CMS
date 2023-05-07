@@ -203,11 +203,15 @@ func SetupRouting(app *fiber.App) {
 		}
 		if db.IsHostInGroup(groupId, id) {
 			err = db.AddContest(newContest)
+			if errors.Is(err, gorm.ErrInvalidData) {
+				log.Println("this contest already exists " + newContest.Name)
+				return c.Status(http.StatusBadRequest).SendString("this contest already exists")
+			}
 			if err != nil {
 				log.Println("can't create contest " + err.Error())
 				return c.Status(http.StatusInternalServerError).SendString("can't create contest")
 			}
-			id, err := db.GetContestId(newContest.Name)
+			id, err := db.GetContestId(newContest)
 			err = db.AddContestToGroup(groupId, id)
 			if err != nil {
 				log.Println("can't add contest to group " + err.Error())
@@ -351,14 +355,10 @@ func SetupRouting(app *fiber.App) {
 			log.Println(err.Error())
 			return c.Status(http.StatusInternalServerError).SendString("unknown error")
 		}
-		contestName := c.GetReqHeaders()["Contest"]
-		id, err := db.GetContestId(contestName)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			log.Println("no such contest " + err.Error())
-			return c.Status(http.StatusBadRequest).SendString("no such contest")
-		} else if err != nil {
+		id, err := strconv.Atoi(c.GetReqHeaders()["Contest"])
+		if err != nil {
 			log.Println(err.Error())
-			return c.Status(http.StatusInternalServerError).SendString("unable to edit contest")
+			return c.Status(http.StatusBadRequest).SendString("no such contest")
 		}
 		group, err := db.GetGroupByContest(id)
 		if err != nil {
@@ -366,6 +366,11 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusInternalServerError).SendString("unknown error")
 		}
 		if db.IsHostInGroup(group, modId) {
+			prevId, err := db.GetContestId(contest)
+			if err == nil && prevId != 0 {
+				log.Println("trying to change contest into existing " + contest.Name)
+				return c.Status(http.StatusBadRequest).SendString("identical contest exists")
+			}
 			err = db.EditContest(id, contest)
 			if err != nil {
 				log.Println(err.Error())

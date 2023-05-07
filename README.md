@@ -25,7 +25,7 @@
     Возможные коды:
     - 500
     - валидный ответ (200)
-* /api/inner/contest/x - информация о контесте с id=x. Доступен всем. Возвращает json номер [2](#contest-json)
+* /api/inner/contests/x - информация о контесте с id=x. Доступен всем. Возвращает json номер [2](#contest-json)
     Возможные коды:
     - 500
     - валидный ответ (200)
@@ -56,7 +56,7 @@
     - 200 - login successful
 * /api/admins/create_contest - создает новый контест в группе, название которой написано в хедере с ключом Group. Также требует json номер [2](#contest-json). Вы должны быть хостом в данной группе. \
     Возможные коды:
-    - 400 - invalid json body или no such group
+    - 400 - invalid json body или no such group или this contest already exists
     - 500
     - 403 - you are not host
     - 200 - successful
@@ -78,7 +78,7 @@
 * /api/admins/edit_contest - изменяет контест, название которого передано в хедерах с ключом Contest. Также принимает json номер [2](#contest-json), в котором описано, \
 как должен выглядеть контест после изменения (все поля!). Вы должны быть хостом в группе, где находится контест. \
     Возможные коды:
-    - 400 - invalid json body или no such contest
+    - 400 - invalid json body или no such contest или identical contest exists
     - 500
     - 200 - successful
 * /api/admins/remove_host - забирает хоста в заданной группе. Принимает json номер [4](#group-host-json). Вы должны быть хостом в данной группе, при этом нельзя \
