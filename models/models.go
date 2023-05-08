@@ -87,6 +87,10 @@ type SessionInfo struct {
 	Session string `json:"session"`
 }
 
+type TimeJson struct {
+	UntilExpires int64 `json:"untilExpires"`
+}
+
 type Role int
 
 const (

@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// CookieAuthCheck проверяет, актуальна ли текущая сессия модера
-func CookieAuthCheck(c *fiber.Ctx) int {
+// SessionAuthCheck проверяет, актуальна ли текущая сессия модера
+func SessionAuthCheck(c *fiber.Ctx) int {
 	session, exists := c.GetReqHeaders()["Session"]
 	if !exists {
 		log.Println("session header not found")
@@ -40,4 +40,11 @@ func CheckPasswordHash(password string, hash string) bool {
 
 func (s Session) isExpired() bool {
 	return s.expiry.Before(time.Now())
+}
+
+func (s Session) untilExpiration() int64 {
+	if s.isExpired() {
+		return 0
+	}
+	return s.expiry.Unix() - time.Now().Unix()
 }

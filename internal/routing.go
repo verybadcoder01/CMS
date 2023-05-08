@@ -30,7 +30,7 @@ func SetupRouting(app *fiber.App) {
 	})
 	// требует, чтобы ты был залогинен как дефолтный модератор
 	app.Post("/api/shutdown", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -48,7 +48,7 @@ func SetupRouting(app *fiber.App) {
 		return app.Shutdown()
 	})
 	app.Post("/api/inner/register_admin", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -113,7 +113,7 @@ func SetupRouting(app *fiber.App) {
 		return nil
 	})
 	app.Get("/api/admins/home", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -122,7 +122,20 @@ func SetupRouting(app *fiber.App) {
 		case http.StatusBadRequest:
 			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		default:
-			return c.Status(http.StatusOK).SendString("welcome")
+			var t models.TimeJson
+			session, _ := c.GetReqHeaders()["Session"]
+			t.UntilExpires = sessions[session].untilExpiration()
+			b, err := json.Marshal(t)
+			if err != nil {
+				log.Println(err.Error())
+				return c.Status(http.StatusInternalServerError).SendString("can't marshall response")
+			}
+			_, err = c.Response().BodyWriter().Write(b)
+			if err != nil {
+				log.Println(err.Error())
+				return c.Status(http.StatusInternalServerError).SendString("can't marshall response")
+			}
+			return nil
 		}
 	})
 	app.Get("/api/users/groups/+", func(c *fiber.Ctx) error {
@@ -176,7 +189,7 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
 		group := c.GetReqHeaders()["Group"]
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -222,7 +235,7 @@ func SetupRouting(app *fiber.App) {
 		return c.Status(http.StatusForbidden).SendString("you are not host")
 	})
 	app.Post("/api/admins/create_group", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -263,7 +276,7 @@ func SetupRouting(app *fiber.App) {
 		return c.Status(http.StatusOK).SendString("successful")
 	})
 	app.Post("/api/admins/logout", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -291,7 +304,7 @@ func SetupRouting(app *fiber.App) {
 		return nil
 	})
 	app.Post("/api/admins/give_host", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -333,7 +346,7 @@ func SetupRouting(app *fiber.App) {
 		return c.Status(http.StatusOK).SendString("success")
 	})
 	app.Post("/api/admins/edit_contest", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -380,7 +393,7 @@ func SetupRouting(app *fiber.App) {
 		return c.Status(http.StatusOK).SendString("successful")
 	})
 	app.Post("/api/admins/remove_host", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
@@ -415,7 +428,7 @@ func SetupRouting(app *fiber.App) {
 		return c.Status(http.StatusOK).SendString("success")
 	})
 	app.Post("/api/admins/edit_group", func(c *fiber.Ctx) error {
-		res := CookieAuthCheck(c)
+		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
 			return c.Status(http.StatusUnauthorized).SendString("session has expired")
