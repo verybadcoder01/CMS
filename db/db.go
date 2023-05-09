@@ -63,7 +63,7 @@ func AddContestToGroup(GroupId int, contestId int) error {
 
 func AddContest(contest models.BasicContest) error {
 	newContest := models.Contest{BasicContest: contest}
-	res := DbPool.First(&newContest, "name = ? AND url = ? AND contest_picture = ? AND comment = ? AND statements_url = ?", contest.Name, contest.Url, contest.ContestPicture, contest.Comment, contest.StatementsUrl)
+	res := DbPool.First(&newContest, "name = ? AND url = ? AND contest_picture = ? AND comment = ? AND statements_url = ? AND deadline = ?", contest.Name, contest.Url, contest.ContestPicture, contest.Comment, contest.StatementsUrl, contest.Deadline)
 	if errors.Is(res.Error, gorm.ErrRecordNotFound) {
 		res = DbPool.Create(&models.Contest{BasicContest: contest})
 		return res.Error
@@ -96,7 +96,7 @@ func AddHostToGroup(GroupId int, ModeratorId int) error {
 
 func GetContestId(find models.BasicContest) (int, error) {
 	var res models.Contest
-	err := DbPool.Find(&res, "name = ? AND url = ? AND contest_picture = ? AND comment = ? AND statements_url = ?", find.Name, find.Url, find.ContestPicture, find.Comment, find.StatementsUrl)
+	err := DbPool.Find(&res, "name = ? AND url = ? AND contest_picture = ? AND comment = ? AND statements_url = ? AND deadline = ?", find.Name, find.Url, find.ContestPicture, find.Comment, find.StatementsUrl, find.Deadline)
 	return res.ID, err.Error
 }
 
