@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -188,7 +189,7 @@ func SetupRouting(app *fiber.App) {
 			log.Println("can't unmarshall json " + err.Error())
 			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
-		group := c.GetReqHeaders()["Group"]
+		group, _ := url.QueryUnescape(c.GetReqHeaders()["Group"])
 		res := SessionAuthCheck(c)
 		switch res {
 		case http.StatusUnauthorized:
@@ -450,7 +451,7 @@ func SetupRouting(app *fiber.App) {
 			log.Println("can't parse json " + err.Error())
 			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
-		group := c.GetReqHeaders()["Group"]
+		group, _ := url.QueryUnescape(c.GetReqHeaders()["Group"])
 		gId, err := db.GetGroupId(group)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return c.Status(http.StatusBadRequest).SendString("no such group")
