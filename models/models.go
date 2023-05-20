@@ -21,7 +21,7 @@ type User struct {
 }
 
 type BasicGroup struct {
-	Name         string `json:"name"`
+	Name         string `gorm:"unique" json:"name"`
 	GroupPicture string `json:"groupPicture"`
 	Description  string `json:"description"`
 }

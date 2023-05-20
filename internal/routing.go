@@ -255,7 +255,7 @@ func SetupRouting(app *fiber.App) {
 		err = db.AddGroup(newGroup)
 		if err != nil {
 			log.Println(err.Error())
-			return c.Status(http.StatusInternalServerError).SendString("failed to create new group")
+			return c.Status(http.StatusBadRequest).SendString("name not unique")
 		}
 		id, _ := db.GetGroupId(newGroup.Name)
 		moderatorId, err := db.GetModeratorId(session.login)
