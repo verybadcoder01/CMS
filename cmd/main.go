@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cms/config"
 	"cms/db"
 	"cms/internal"
 	"cms/models"
@@ -13,8 +14,7 @@ import (
 )
 
 func main() {
-	conf := internal.ParseConfig()
-	models.ISDEBUG = conf.IsDebug
+	conf := config.ParseConfig()
 	f, err := os.OpenFile(conf.LogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		panic(err)

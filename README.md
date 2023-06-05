@@ -80,6 +80,7 @@
 как должен выглядеть контест после изменения (все поля!). Вы должны быть хостом в группе, где находится контест. \
     Возможные коды:
     - 400 - invalid json body или no such contest или identical contest exists
+    - 403 - you are not host in group
     - 500
     - 200 - successful
 * /api/admins/remove_host - забирает хоста в заданной группе. Принимает json номер [4](#group-host-json). Вы должны быть хостом в данной группе, при этом нельзя \

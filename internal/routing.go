@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"cms/config"
 	"cms/db"
 	"cms/models"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -23,7 +25,60 @@ type Session struct {
 
 var SessionExpiryTime = 6 * time.Hour
 
-var sessions = map[string]Session{}
+var sessions sync.Map
+
+func login(c *fiber.Ctx) error {
+	var req models.SimpleModerator
+	err := json.Unmarshal(c.Body(), &req)
+	if err != nil {
+		log.Println("can't decode json: " + err.Error())
+		return c.Status(http.StatusBadRequest).SendString("invalid json body")
+	}
+	expected, err := db.GetPasswordHash(req.Login)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("user with login %v not found", req.Login)
+		return c.Status(http.StatusBadRequest).SendString("user not found")
+	}
+	if !CheckPasswordHash(req.Password, expected) {
+		return c.Status(http.StatusForbidden).SendString("wrong password")
+	}
+	sessionToken := uuid.NewString()
+	expTime := time.Now().Add(SessionExpiryTime)
+	if config.ISDEBUG == true {
+		expTime = time.Now().Add(time.Minute)
+	}
+	session := Session{login: req.Login, expiry: expTime}
+	sessions.Store(sessionToken, session)
+	var cookie models.SessionInfo
+	cookie.Session = sessionToken
+	res, err := json.Marshal(cookie)
+	if err != nil {
+		log.Println(err.Error())
+		return c.Status(http.StatusInternalServerError).SendString("can't marshall response")
+	}
+	_, err = c.Response().BodyWriter().Write(res)
+	if err != nil {
+		log.Println(err.Error())
+		return c.Status(http.StatusInternalServerError).SendString(err.Error())
+	}
+	log.Printf("send session %v", cookie)
+	return nil
+}
+
+func logout(c *fiber.Ctx) error {
+	res := SessionAuthCheck(c)
+	switch res {
+	case http.StatusUnauthorized:
+		return c.Status(http.StatusUnauthorized).SendString("session has expired")
+	case http.StatusForbidden:
+		return c.Status(http.StatusForbidden).SendString("user not authorized")
+	case http.StatusBadRequest:
+		return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
+	}
+	token := c.GetReqHeaders()["Session"]
+	sessions.Delete(token)
+	return c.Status(http.StatusOK).SendString("logout successful")
+}
 
 func SetupRouting(app *fiber.App) {
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -41,8 +96,8 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
 		token := c.GetReqHeaders()["Session"]
-		session, _ := sessions[token]
-		id, _ := db.GetModeratorId(session.login)
+		session, _ := sessions.Load(token)
+		id, _ := db.GetModeratorId(session.(Session).login)
 		if id != 1 {
 			return c.Status(http.StatusForbidden).SendString("must be number 1 moderator to do this")
 		}
@@ -76,43 +131,7 @@ func SetupRouting(app *fiber.App) {
 		}
 		return c.SendStatus(http.StatusOK)
 	})
-	app.Post("/api/admins/login", func(c *fiber.Ctx) error {
-		var req models.SimpleModerator
-		err := json.Unmarshal(c.Body(), &req)
-		if err != nil {
-			log.Println("can't decode json: " + err.Error())
-			return c.Status(http.StatusBadRequest).SendString("invalid json body")
-		}
-		expected, err := db.GetPasswordHash(req.Login)
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			log.Printf("user with login %v not found", req.Login)
-			return c.Status(http.StatusBadRequest).SendString("user not found")
-		}
-		if !CheckPasswordHash(req.Password, expected) {
-			return c.Status(http.StatusForbidden).SendString("wrong password")
-		}
-		sessionToken := uuid.NewString()
-		expTime := time.Now().Add(SessionExpiryTime)
-		if models.ISDEBUG == true {
-			expTime = time.Now().Add(time.Minute)
-		}
-		session := Session{login: req.Login, expiry: expTime}
-		sessions[sessionToken] = session
-		var cookie models.SessionInfo
-		cookie.Session = sessionToken
-		res, err := json.Marshal(cookie)
-		if err != nil {
-			log.Println(err.Error())
-			return c.Status(http.StatusInternalServerError).SendString("can't marshall response")
-		}
-		_, err = c.Response().BodyWriter().Write(res)
-		if err != nil {
-			log.Println(err.Error())
-			return c.Status(http.StatusInternalServerError).SendString(err.Error())
-		}
-		log.Printf("send session %v", cookie)
-		return nil
-	})
+	app.Post("/api/admins/login", login)
 	app.Get("/api/admins/home", func(c *fiber.Ctx) error {
 		res := SessionAuthCheck(c)
 		switch res {
@@ -125,7 +144,10 @@ func SetupRouting(app *fiber.App) {
 		default:
 			var t models.TimeJson
 			session, _ := c.GetReqHeaders()["Session"]
-			t.UntilExpires = sessions[session].untilExpiration()
+			info, exists := sessions.Load(session)
+			if exists {
+				t.UntilExpires = info.(Session).untilExpiration()
+			}
 			b, err := json.Marshal(t)
 			if err != nil {
 				log.Println(err.Error())
@@ -200,8 +222,8 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
 		token := c.GetReqHeaders()["Session"]
-		session, _ := sessions[token]
-		id, err := db.GetModeratorId(session.login)
+		session, _ := sessions.Load(token)
+		id, err := db.GetModeratorId(session.(Session).login)
 		if err != nil {
 			log.Println(err.Error())
 			return c.Status(http.StatusInternalServerError).SendString("unknown error")
@@ -246,7 +268,7 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
 		token := c.GetReqHeaders()["Session"]
-		session, _ := sessions[token]
+		session, _ := sessions.Load(token)
 		var newGroup models.BasicGroup
 		err := json.Unmarshal(c.Body(), &newGroup)
 		if err != nil {
@@ -259,7 +281,7 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("name not unique")
 		}
 		id, _ := db.GetGroupId(newGroup.Name)
-		moderatorId, err := db.GetModeratorId(session.login)
+		moderatorId, err := db.GetModeratorId(session.(Session).login)
 		if err != nil {
 			log.Println(err.Error())
 			return c.Status(http.StatusInternalServerError).SendString("failed to create new group")
@@ -276,20 +298,7 @@ func SetupRouting(app *fiber.App) {
 		}
 		return c.Status(http.StatusOK).SendString("successful")
 	})
-	app.Post("/api/admins/logout", func(c *fiber.Ctx) error {
-		res := SessionAuthCheck(c)
-		switch res {
-		case http.StatusUnauthorized:
-			return c.Status(http.StatusUnauthorized).SendString("session has expired")
-		case http.StatusForbidden:
-			return c.Status(http.StatusForbidden).SendString("user not authorized")
-		case http.StatusBadRequest:
-			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
-		}
-		token := c.GetReqHeaders()["Session"]
-		delete(sessions, token)
-		return c.Status(http.StatusOK).SendString("logout successful")
-	})
+	app.Post("/api/admins/logout", logout)
 	app.Get("/api/users/groups", func(c *fiber.Ctx) error {
 		groups, err := db.GetGroups()
 		if err != nil {
@@ -315,8 +324,8 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
 		token := c.GetReqHeaders()["Session"]
-		session, _ := sessions[token]
-		id, err := db.GetModeratorId(session.login)
+		session, _ := sessions.Load(token)
+		id, err := db.GetModeratorId(session.(Session).login)
 		if err != nil {
 			log.Println(err.Error())
 			return c.Status(http.StatusInternalServerError).SendString("unable to get your id")
@@ -363,8 +372,8 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("invalid json body")
 		}
 		token := c.GetReqHeaders()["Session"]
-		session, _ := sessions[token]
-		modId, err := db.GetModeratorId(session.login)
+		session, _ := sessions.Load(token)
+		modId, err := db.GetModeratorId(session.(Session).login)
 		if err != nil {
 			log.Println(err.Error())
 			return c.Status(http.StatusInternalServerError).SendString("unknown error")
@@ -390,6 +399,8 @@ func SetupRouting(app *fiber.App) {
 				log.Println(err.Error())
 				return c.Status(http.StatusInternalServerError).SendString("unable to edit contest")
 			}
+		} else {
+			return c.Status(http.StatusForbidden).SendString("you are not host in group")
 		}
 		return c.Status(http.StatusOK).SendString("successful")
 	})
@@ -404,8 +415,8 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
 		token := c.GetReqHeaders()["Session"]
-		session, _ := sessions[token]
-		id, err := db.GetModeratorId(session.login)
+		session, _ := sessions.Load(token)
+		id, err := db.GetModeratorId(session.(Session).login)
 		if err != nil {
 			log.Println(err.Error())
 			return c.Status(http.StatusInternalServerError).SendString("unable to get your id")
@@ -439,8 +450,8 @@ func SetupRouting(app *fiber.App) {
 			return c.Status(http.StatusBadRequest).SendString("header doesn't have session key")
 		}
 		token := c.GetReqHeaders()["Session"]
-		session, _ := sessions[token]
-		id, err := db.GetModeratorId(session.login)
+		session, _ := sessions.Load(token)
+		id, err := db.GetModeratorId(session.(Session).login)
 		if err != nil {
 			log.Println(err.Error())
 			return c.Status(http.StatusInternalServerError).SendString("unable to get your id")

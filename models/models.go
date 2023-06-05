@@ -1,17 +1,5 @@
 package models
 
-var ISDEBUG = false
-
-type Config struct {
-	DbPath            string `yaml:"db_path"`
-	LogPath           string `yaml:"log_path"`
-	Port              string `yaml:"port"`
-	IsDebug           bool   `yaml:"is_debug"`
-	AdminLogin        string `yaml:"admin_login"`
-	AdminPassword     string `yaml:"admin_password"`
-	SessionExpiryTime int    `yaml:"session_expiry_time"` // в часах, при is_debug=false
-}
-
 type User struct {
 	EjId           int    `gorm:"primaryKey;autoIncrement:false" json:"ejId"`
 	FirstName      string `json:"firstName"`

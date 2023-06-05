@@ -15,14 +15,14 @@ func SessionAuthCheck(c *fiber.Ctx) int {
 		log.Println("session header not found")
 		return http.StatusBadRequest
 	}
-	info, exists := sessions[session]
+	info, exists := sessions.Load(session)
 	if !exists {
 		log.Printf("user not authorized on access route, session %v", info)
 		return http.StatusForbidden
 	}
-	if info.isExpired() {
+	if info.(Session).isExpired() {
 		log.Printf("session %v has expired", info)
-		delete(sessions, session)
+		sessions.Delete(session)
 		return http.StatusUnauthorized
 	}
 	return 0
